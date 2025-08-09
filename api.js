@@ -1,148 +1,108 @@
-const express = require('express')
-const bookingmodel = require('./booking')
-const mongoose = require('mongoose')
-const bodyParser = require('body-parser')
-const cors = require('cors')
-const adminmodel = require('./aRegister')
-const baddmodel = require('./bikeAdd')
-// const bcrypt = require('bcrypt')
+const express = require('express');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const multer = require('multer');
 
+const bookingmodel = require('./booking');
+const adminmodel = require('./aRegister');
+const baddmodel = require('./bikeAdd');
 
 const app = express();
+
+// Middleware
 app.use(bodyParser.json());
 app.use(cors());
 app.use(express.static("attach"));
 
-
-mongoose.connect("mongodb://127.0.0.1:27017/BikeServ")
-.then((res)=>{
-    console.log(res,"DB Connected")
-}).catch(err=>{console.log(err)});
-
-
-app.post("/ClintBooking",async(req,res)=>{
-    const{cname,cemail,service,mobile,detail} = req.body;
-
-    let send = await bookingmodel.create({
-        cname:cname,
-        cemail:cemail,
-        service:service,
-        mobile:mobile,
-        detail:detail
-    })
-
-
-    if(send)
-    {
-        res.status(200).json({"msg":"Data Inserted"})
-    }
-    else{
-        res.status(400).json({"error":"Inavalid argu"})
-    }
-})
-
-//Admin Registration
-app.post("/adminRegister",async(req,res)=>{
-    const{id,yname,mobile,password} = req.body;
-
-    // const pid = await adminmodel.findOne({mobile:mobile});
-    // const secPass=await bcrypt.hash(password,10);
-
-    // if(!pid){
-        let send = await adminmodel.create({
-            id:id,
-            yname:yname,
-            mobile:mobile,
-            password:password
-        })
-
-        if(send){
-            res.status(200).json({'msg':'data inserted'})
-        }
-    //     else{
-    //         res.status(400).json({'error':'Invalid Argu'})
-    //     }
-    // }
-    else{
-        res.status(400).json({"error":"This Phone number is already registerd"})
-    }
-    })
-
-    //Admin Login
-app.post("/adminLogin",async(req,res)=>{
-    const{yname,password}=req.body;
- 
-    let login = await adminmodel.findOne({password:password})
-
-    if(login){
-        res.send(login);
-}
-    else{
-        res.status(400).json({"error":"Wrong User"})
-    }
-})
-
-
-//fetch Service detail
-app.get("/fetchDetail",async(req,res)=>{
-
-    let data = await bookingmodel.find();
-    
-res.send(data);
-})
-
-//multer npm
-var multer = require('multer');
-const bikeAdd = require('./bikeAdd')
-// const dRegister = require('./dRegister')
-
-let storage= multer.diskStorage({
-    destination:function(req,file,cb){
-    cb(null,'attach')
-    },
-
-    filename:function(req,file,cb){
-        cb(null,file.fieldname+ '-'+Date.now()+'.'+file.originalname.split('.')
-		[file.originalname.split('.').length-1])
-       }
-
-
+// Root route (to fix "Cannot GET /" error on browser open)
+app.get("/", (req, res) => {
+    res.send("Backend is running 🚀");
 });
-let upload = multer({storage:storage}).single('attachment');
 
-//Add your bike
-app.post('/adding',async(req,res)=>{
+// MongoDB connection
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log("✅ MongoDB Connected"))
+    .catch(err => console.error("❌ MongoDB Connection Error:", err));
 
-    upload(req,res,async(err)=>{
+// Client Booking
+app.post("/ClintBooking", async (req, res) => {
+    try {
+        const { cname, cemail, service, mobile, detail } = req.body;
+        let send = await bookingmodel.create({ cname, cemail, service, mobile, detail });
 
-        if(err){
-            res.status(400).json({"error":"Error in Image Uploading"})
+        res.status(200).json({ msg: "Data Inserted" });
+    } catch (error) {
+        res.status(400).json({ error: "Invalid arguments" });
+    }
+});
+
+// Admin Registration
+app.post("/adminRegister", async (req, res) => {
+    try {
+        const { id, yname, mobile, password } = req.body;
+        let send = await adminmodel.create({ id, yname, mobile, password });
+        res.status(200).json({ msg: "Data inserted" });
+    } catch (error) {
+        res.status(400).json({ error: "This phone number may already be registered" });
+    }
+});
+
+// Admin Login
+app.post("/adminLogin", async (req, res) => {
+    const { yname, password } = req.body;
+    let login = await adminmodel.findOne({ password });
+    if (login) {
+        res.send(login);
+    } else {
+        res.status(400).json({ error: "Wrong User" });
+    }
+});
+
+// Fetch Service Details
+app.get("/fetchDetail", async (req, res) => {
+    let data = await bookingmodel.find();
+    res.send(data);
+});
+
+// Multer setup
+let storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'attach');
+    },
+    filename: function (req, file, cb) {
+        cb(null, file.fieldname + '-' + Date.now() + '.' + file.originalname.split('.').pop());
+    }
+});
+let upload = multer({ storage: storage }).single('attachment');
+
+// Add Bike
+app.post('/adding', (req, res) => {
+    upload(req, res, async (err) => {
+        if (err) {
+            return res.status(400).json({ error: "Error in Image Uploading" });
         }
-        else{
-            const{bname,mileage,description,price}=req.body;
-
-            let send = baddmodel.create({
-                "bname":bname,
-                "mileage":mileage,
-                "description":description,
-                "price":price,
-                "attachment":req.file.filename
-            })
-            if(send){
-                res.status(200).json({"Success":"Your bike is Added"})
-                }
-                else{
-                res.status(400).json({"error":"Bike is not added"})
-                }
+        try {
+            const { bname, mileage, description, price } = req.body;
+            let send = await baddmodel.create({
+                bname, mileage, description, price,
+                attachment: req.file.filename
+            });
+            res.status(200).json({ Success: "Your bike is Added" });
+        } catch (error) {
+            res.status(400).json({ error: "Bike is not added" });
         }
-})
-})
+    });
+});
 
-//Fetching bike detail
-app.get("/fetchBikedetail",async(req,res)=>{
-
+// Fetch Bike Details
+app.get("/fetchBikedetail", async (req, res) => {
     let data = await baddmodel.find();
     res.send(data);
-})
+});
 
-app.listen(1234);
+// Dynamic Port for Render
+const PORT = process.env.PORT || 1234;
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+});
