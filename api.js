@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const multer = require('multer');
+require('dotenv').config(); // Load environment variables from .env file
 
 const bookingmodel = require('./booking');
 const adminmodel = require('./aRegister');
@@ -10,9 +11,16 @@ const baddmodel = require('./bikeAdd');
 
 const app = express();
 
+// Setup CORS - allow only your frontend domain
+app.use(cors({
+    origin: 'https://bullet-k42eosfx7-prince-pandeys-projects.vercel.app', // Replace with your actual frontend URL
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true, // if you use cookies or authentication
+}));
+
 // Middleware
 app.use(bodyParser.json());
-app.use(cors());
 app.use(express.static("attach"));
 
 // Root route (to fix "Cannot GET /" error on browser open)
